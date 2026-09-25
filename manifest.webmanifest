@@ -2,7 +2,7 @@
   "name": "143 — Your private world",
   "short_name": "143",
   "description": "A private place for conversations, memories and the people who matter to you.",
-  "start_url": "./index.html",
+  "start_url": "./web.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#fff9f8",

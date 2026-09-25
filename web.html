@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#fff9f8">
+  <meta name="description" content="Your private 143 space on a linked device.">
+  <title>Your space — 143 Web</title>
+  <link rel="icon" href="assets/logo.png">
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="assets/web.css">
+</head>
+<body class="web-body">
+  <header class="web-header">
+    <div class="container web-topbar">
+      <a class="brand" href="web.html"><img src="assets/logo.png" alt="143 logo"><span>143 Web</span></a>
+      <span class="web-connection" id="connection">Connecting…</span>
+      <button class="btn btn-light" id="signOut" type="button">Sign out</button>
+    </div>
+  </header>
+  <div class="container web-layout">
+    <nav class="web-nav" aria-label="Your space">
+      <button class="web-nav-item active" data-view="home" type="button">⌂ <span>Home</span></button>
+      <button class="web-nav-item" data-view="memories" type="button">▧ <span>Memories</span></button>
+      <button class="web-nav-item" data-view="chat" type="button">◌ <span>Chat</span></button>
+      <button class="web-nav-item" data-view="account" type="button">♡ <span>Us</span></button>
+      <p class="web-nav-note">Linked with your phone. Revoke this browser any time from Linked devices in the app.</p>
+    </nav>
+    <main class="web-main" id="webMain" aria-live="polite">
+      <div class="web-skeleton" aria-label="Loading your space"><div></div><div></div><div></div></div>
+    </main>
+  </div>
+  <script src="assets/app.js"></script>
+  <script src="assets/web.js"></script>
+</body>
+</html>
