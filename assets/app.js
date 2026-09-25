@@ -7,6 +7,18 @@ const $=(q,scope=document)=>scope.querySelector(q);
 const $$=(q,scope=document)=>[...scope.querySelectorAll(q)];
 const uuid=()=>crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
+async function renewAccess(){
+  const refresh=localStorage.getItem('143_link_refresh');
+  if(!refresh)return false;
+  try{
+    const response=await fetch(API+'/auth/token/refresh',{method:'POST',headers:{'Accept':'application/json','Content-Type':'application/json','Idempotency-Key':uuid()},body:JSON.stringify({refresh_token:refresh}),cache:'no-store'});
+    if(!response.ok)throw new Error('Session expired');
+    const payload=await response.json();const tokens=payload.data??payload;
+    access=tokens.access_token;sessionStorage.setItem('143_link_token',access);localStorage.setItem('143_link_refresh',tokens.refresh_token);
+    return true;
+  }catch(_){localStorage.removeItem('143_link_refresh');return false;}
+}
+
 function enablePwa(){
   const manifest=document.createElement('link');manifest.rel='manifest';manifest.href='manifest.webmanifest';document.head.append(manifest);
   const apple=document.createElement('meta');apple.name='apple-mobile-web-app-capable';apple.content='yes';document.head.append(apple);
@@ -22,9 +34,15 @@ async function api(path,options={}){
   const headers={'Accept':'application/json','Content-Type':'application/json',...(options.headers||{})};
   if(access)headers.Authorization='Bearer '+access;
   if((options.method||'GET')!=='GET')headers['Idempotency-Key']=uuid();
-  const response=await fetch(API+path,{...options,headers,cache:'no-store'});
+  let response=await fetch(API+path,{...options,headers,cache:'no-store'});
+  if(response.status===401&&access&&!path.startsWith('/auth/')&&localStorage.getItem('143_link_refresh')){
+    if(await renewAccess()){
+      headers.Authorization='Bearer '+access;
+      response=await fetch(API+path,{...options,headers,cache:'no-store'});
+    }
+  }
   const body=await response.json().catch(()=>({}));
-  if(!response.ok)throw new Error(body.detail||body.message||Object.values(body.errors||{})?.flat?.()[0]||'Something went wrong. Please try again.');
+  if(!response.ok){const error=new Error(body.detail||body.message||Object.values(body.errors||{})?.flat?.()[0]||'Something went wrong. Please try again.');error.status=response.status;throw error;}
   return body.data??body;
 }
 
@@ -56,7 +74,7 @@ async function startPairing(){
         if(state.status==='approved'&&state.exchange_grant){
           setPairingState('Phone approved','Finishing your secure connection…','approved');
           const tokens=await api(`/linked-devices/qr-sessions/${encodeURIComponent(session.session_id)}/exchange`,{method:'POST',body:JSON.stringify({browser_secret:session.browser_secret,exchange_grant:state.exchange_grant})});
-          access=tokens.access_token;sessionStorage.setItem('143_link_token',access);sessionStorage.setItem('143_link_refresh',tokens.refresh_token||'');
+          access=tokens.access_token;sessionStorage.setItem('143_link_token',access);if(tokens.refresh_token)localStorage.setItem('143_link_refresh',tokens.refresh_token);
           showLinked(tokens.user);return;
         }
         if(state.status==='expired'||state.status==='cancelled'){setPairingState('Code expired','Create a fresh code and scan it again.','error');$('#pairRetry')?.removeAttribute('hidden');return;}
@@ -70,22 +88,22 @@ async function startPairing(){
 function showLinked(user){
   const main=$('.login-main');if(!main)return;
   const name=user?.display_name||user?.username||'your account';
-  main.innerHTML=`<div class="linked-success"><div class="success-check">✓</div><div class="kicker"><span class="kicker-dot"></span>Connected</div><h2>This browser is linked.</h2><p>143 Web is securely connected to <strong>${escapeHtml(name)}</strong>. You can revoke it any time from Linked devices on your phone.</p><a class="btn btn-primary" href="index.html">Continue to 143</a></div>`;
+  main.innerHTML=`<div class="linked-success"><div class="success-check">✓</div><div class="kicker"><span class="kicker-dot"></span>Connected</div><h2>This browser is linked.</h2><p>143 Web is securely connected to <strong>${escapeHtml(name)}</strong>. You can revoke it any time from Linked devices on your phone.</p><a class="btn btn-primary" href="web.html">Open your space</a></div>`;
 }
 function escapeHtml(v){const e=document.createElement('div');e.textContent=v;return e.innerHTML;}
 
 $('#pairRetry')?.addEventListener('click',startPairing);
-if($('#pairQr'))startPairing();
+if($('#pairQr')){(async()=>{if(access||await renewAccess())location.replace('web.html');else startPairing();})();}
 
 $('#altLoginBtn')?.addEventListener('click',()=>$('#fallback')?.classList.toggle('open'));
 $('#loginForm')?.addEventListener('submit',async e=>{
   e.preventDefault();const err=$('#loginError');if(err)err.textContent='';
-  try{const data=await api('/auth/login',{method:'POST',body:JSON.stringify({username:$('#username').value.trim(),password:$('#password').value,device_name:'143 Linked Web'})});access=data.access_token;sessionStorage.setItem('143_link_token',access);$('#legacyLink')?.classList.add('open');$('#altLoginBtn').textContent='Signed in — enter the link details from your phone';}
+  try{const data=await api('/auth/login',{method:'POST',body:JSON.stringify({username:$('#username').value.trim(),password:$('#password').value,device_name:'143 Linked Web'})});access=data.access_token;sessionStorage.setItem('143_link_token',access);if(data.refresh_token)localStorage.setItem('143_link_refresh',data.refresh_token);$('#legacyLink')?.classList.add('open');$('#altLoginBtn').textContent='Signed in — enter the link details from your phone';}
   catch(ex){if(err)err.textContent=ex.message;}
 });
 $('#linkForm')?.addEventListener('submit',async e=>{
   e.preventDefault();const err=$('#linkError');if(err)err.textContent='';
-  try{await api('/linked-devices/link-intents/'+encodeURIComponent($('#intent').value.trim())+'/confirm',{method:'POST',body:JSON.stringify({link_token:$('#linkToken').value.trim(),device_id:'web-'+uuid(),device_name:$('#deviceName').value.trim()||'143 Web',platform:'web'})});$('#legacyLink').innerHTML='<div class="notice success"><b>Device linked.</b> This browser is now registered with your 143 account.</div>';}
+  try{await api('/linked-devices/link-intents/'+encodeURIComponent($('#intent').value.trim())+'/confirm',{method:'POST',body:JSON.stringify({link_token:$('#linkToken').value.trim(),device_id:'web-'+uuid(),device_name:$('#deviceName').value.trim()||'143 Web',platform:'web'})});location.assign('web.html');}
   catch(ex){if(err)err.textContent=ex.message;}
 });
 
